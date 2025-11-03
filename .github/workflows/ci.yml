@@ -66,7 +66,8 @@ jobs:
         formatted_line = f"{issue_number}|{timestamp}|{author}|{message_content}"
         
         # 对内容进行Base64编码，避免特殊字符问题
-        encoded_line = base64.b64encode(formatted_line.encode('utf-8')).decode('utf-8')
+        # encoded_line = base64.b64encode(formatted_line.encode('utf-8')).decode('utf-8')
+        encoded_line = formatted_line
         
         print(f"原始消息: {message_content}")
         print(f"格式化行: {formatted_line}")
