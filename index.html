@@ -243,6 +243,10 @@
           console.log('lines::', lines);
         } catch (error) {}
       }
+      // 页面加载时获取数据
+      document.addEventListener('DOMContentLoaded', loadMessages);
+      // 可选：每5分钟自动刷新
+      setInterval(loadMessages, 5 * 60 * 1000);
       const messages = [
         "保持好心情",
         "多喝水哦",
