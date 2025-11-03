@@ -1,0 +1,62 @@
+name: message board
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  process-issue:
+    runs-on: ubuntu-latest
+    
+    # 只有包含特定标签或特定格式的 issue 才触发
+    if: |
+      contains(github.event.issue.labels.*.name, 'auto-update') ||
+      startsWith(github.event.issue.title, '[DATA]')
+    
+    steps:
+    - name: Advanced data extraction
+      id: advanced-extract
+      run: |
+        # 使用 Python 进行更复杂的数据提取
+        python3 << EOF
+        import json
+        import re
+        
+        issue_body = """${{ github.event.issue.body }}"""
+        issue_number = ${{ github.event.issue.number }}
+        author = "${{ github.event.issue.user.login }}"
+        
+        # 定义提取模式
+        patterns = {
+            'name': r'名称:\s*(.+)',
+            'value': r'值:\s*(.+)', 
+            'category': r'分类:\s*(.+)',
+            'type': r'类型:\s*(.+)'
+        }
+        
+        extracted_data = {
+            'id': issue_number,
+            'author': author,
+            'date': '${{ fromJSON(steps.extract-data.outputs.json_data).date }}'
+        }
+        
+        # 提取各个字段
+        for field, pattern in patterns.items():
+            match = re.search(pattern, issue_body)
+            if match:
+                extracted_data[field] = match.group(1).strip()
+        
+        # 设置默认值
+        if 'name' not in extracted_data:
+            extracted_data['name'] = "${{ github.event.issue.title }}".replace('[DATA] ', '')
+        if 'value' not in extracted_data:
+            extracted_data['value'] = issue_body.split('\\n')[0][:100]  # 取第一行前100字符
+        if 'category' not in extracted_data:
+            extracted_data['category'] = 'default'
+        if 'type' not in extracted_data:
+            extracted_data['type'] = 'string'
+        
+        # 输出 JSON
+        print(f"::set-output name=json_data::{json.dumps(extracted_data, ensure_ascii=False)}")
+        EOF

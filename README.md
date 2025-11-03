@@ -1,0 +1,1 @@
+基于 [notes](https://github.com/uninto/notes) 做了自动化，可以通过提交 `issue` 来更新便签。
