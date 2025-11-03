@@ -252,10 +252,14 @@
             .map((line) => {
               try {
                 // Base64 解码
-                const decoded = atob(line);
-                console.log("Decoded line:", decoded);
+                // const decoded = atob(line);
+                // console.log("Decoded line:", decoded);
+                // // 假设数据格式为: id|date|author|content
+                // const parts = decoded.split("|");
+
+                console.log("Data line:", line);
                 // 假设数据格式为: id|date|author|content
-                const parts = decoded.split("|");
+                const parts = line.split("|");
 
                 if (parts.length >= 4) {
                   return {
