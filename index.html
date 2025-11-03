@@ -277,7 +277,11 @@
             })
             .filter((msg) => msg !== null);
           console.log("Loaded messages:", messages);
-        } catch (error) {}
+          return messages;
+        } catch (error) {
+          console.error("获取留言数据失败:", error);
+          return;
+        }
       }
       // 页面加载时获取数据
       document.addEventListener("DOMContentLoaded", loadMessages);
@@ -645,9 +649,11 @@
         document.addEventListener("pointerup", handlePointerUp);
       }
 
-      function createCard() {
+      async function createCard() {
         const card = document.createElement("div");
         card.className = "card";
+        const messageList = await loadMessages();
+        const messages = messageList ? messageList.map(msg => msg.content) : [];
 
         const color = randomFrom(colors);
         const angleRange = isMobile ? 6 : 10;
