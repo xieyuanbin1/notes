@@ -15,6 +15,12 @@ jobs:
       startsWith(github.event.issue.title, '[DATA]')
     
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
     - name: Advanced data extraction
       id: advanced-extract
       run: |
@@ -22,6 +28,7 @@ jobs:
         python3 << EOF
         import json
         import re
+        from datetime import datetime
         
         issue_body = """${{ github.event.issue.body }}"""
         issue_number = ${{ github.event.issue.number }}
@@ -38,7 +45,7 @@ jobs:
         extracted_data = {
             'id': issue_number,
             'author': author,
-            'date': '${{ fromJSON(steps.extract-data.outputs.json_data).date }}'
+            'date': datetime.now().strftime('%Y-%m-%d')
         }
         
         # 提取各个字段
@@ -49,14 +56,126 @@ jobs:
         
         # 设置默认值
         if 'name' not in extracted_data:
-            extracted_data['name'] = "${{ github.event.issue.title }}".replace('[DATA] ', '')
+            # 移除 [DATA] 前缀
+            title = "${{ github.event.issue.title }}"
+            extracted_data['name'] = title.replace('[DATA] ', '')
+        
         if 'value' not in extracted_data:
-            extracted_data['value'] = issue_body.split('\\n')[0][:100]  # 取第一行前100字符
+            # 取正文第一行前100字符
+            first_line = issue_body.split('\\n')[0] if issue_body else ""
+            extracted_data['value'] = first_line[:100]
+        
         if 'category' not in extracted_data:
             extracted_data['category'] = 'default'
+        
         if 'type' not in extracted_data:
             extracted_data['type'] = 'string'
         
-        # 输出 JSON
-        print(f"::set-output name=json_data::{json.dumps(extracted_data, ensure_ascii=False)}")
+        # 使用新的输出方式
+        with open('$GITHUB_OUTPUT', 'a') as f:
+            f.write(f'json_data={json.dumps(extracted_data, ensure_ascii=False)}\\n')
+            f.write(f'name={extracted_data["name"]}\\n')
+            f.write(f'value={extracted_data["value"]}\\n')
+            f.write(f'category={extracted_data["category"]}\\n')
         EOF
+
+    - name: Debug output
+      run: |
+        echo "提取的数据:"
+        echo "JSON: ${{ steps.advanced-extract.outputs.json_data }}"
+        echo "名称: ${{ steps.advanced-extract.outputs.name }}"
+        echo "值: ${{ steps.advanced-extract.outputs.value }}"
+        echo "分类: ${{ steps.advanced-extract.outputs.category }}"
+
+    - name: Update JavaScript data in HTML
+      run: |
+        # 定义变量
+        JSON_DATA='${{ steps.advanced-extract.outputs.json_data }}'
+        ISSUE_NUMBER="${{ github.event.issue.number }}"
+        
+        # HTML 文件路径
+        HTML_FILE="index.html"
+        
+        # 检查 HTML 文件是否存在
+        if [ ! -f "$HTML_FILE" ]; then
+          echo "错误: $HTML_FILE 文件不存在"
+          exit 1
+        fi
+        
+        # 使用 Node.js 处理 HTML 文件更新
+        node << EOF
+        const fs = require('fs');
+        const htmlFile = '$HTML_FILE';
+        const newData = $JSON_DATA;
+        
+        // 读取 HTML 文件
+        let htmlContent = fs.readFileSync(htmlFile, 'utf8');
+        
+        console.log('开始更新 HTML 文件...');
+        
+        // 查找留言板数据数组的模式
+        const patterns = [
+          /(var\\s+messageData\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(const\\s+messageData\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(let\\s+messageData\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(var\\s+dataArray\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(const\\s+dataArray\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(let\\s+dataArray\\s*=\\s*\\[)([^\\]]*)(\\];)/
+        ];
+        
+        let match = null;
+        for (const pattern of patterns) {
+          match = htmlContent.match(pattern);
+          if (match) break;
+        }
+        
+        if (match) {
+          console.log('找到现有数据数组');
+          const prefix = match[1];
+          const existingContent = match[2].trim();
+          const suffix = match[3];
+          
+          let newArrayContent;
+          if (existingContent) {
+            // 如果数组不为空，在开头添加新数据
+            newArrayContent = \`\\n  \${JSON.stringify(newData, null, 2)},\${existingContent}\\n\`;
+          } else {
+            // 如果数组为空，直接添加数据
+            newArrayContent = \`\\n  \${JSON.stringify(newData, null, 2)}\\n\`;
+          }
+          
+          // 替换整个数组声明
+          const newDeclaration = prefix + newArrayContent + suffix;
+          htmlContent = htmlContent.replace(match[0], newDeclaration);
+          
+          console.log('成功更新数据数组');
+        } else {
+          console.log('未找到现有数据数组，创建新的...');
+          
+          // 在第一个 script 标签前插入新的 script
+          const scriptPattern = /(<script[^>]*>)/;
+          const scriptMatch = htmlContent.match(scriptPattern);
+          
+          if (scriptMatch) {
+            const newScript = \`\\n<script>\\n// 留言板数据 - 自动生成\\nconst messageData = [\\n  \${JSON.stringify(newData, null, 2)}\\n];\\n</script>\\n\\n\${scriptMatch[0]}\`;
+            htmlContent = htmlContent.replace(scriptMatch[0], newScript);
+          } else {
+            // 如果没有 script 标签，在 body 末尾添加
+            const bodyEndPattern = /(<\\/body>)/;
+            const newScript = \`\\n<script>\\n// 留言板数据 - 自动生成\\nconst messageData = [\\n  \${JSON.stringify(newData, null, 2)}\\n];\\n</script>\\n\\n</body>\`;
+            htmlContent = htmlContent.replace(bodyEndPattern, newScript);
+          }
+        }
+        
+        // 写回文件
+        fs.writeFileSync(htmlFile, htmlContent, 'utf8');
+        console.log('HTML 文件更新完成');
+        EOF
+
+    - name: Commit and push changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "自动更新: 添加 Issue #${{ github.event.issue.number }} 的留言数据"
+        git push
