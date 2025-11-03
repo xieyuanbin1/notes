@@ -34,32 +34,9 @@ jobs:
         issue_body = """${{ github.event.issue.body }}"""
         issue_number = ${{ github.event.issue.number }}
         author = "${{ github.event.issue.user.login }}"
-        
-        # 提取消息内容
-        patterns = [
-            r'消息:\s*(.+)',
-            r'内容:\s*(.+)', 
-            r'值:\s*(.+)',
-            r'留言:\s*(.+)'
-        ]
-        
-        message_content = ""
-        for pattern in patterns:
-            match = re.search(pattern, issue_body)
-            if match:
-                message_content = match.group(1).strip()
-                break
-        
-        # 如果没有找到格式化的内容
-        if not message_content:
-            if issue_body.strip():
-                message_content = issue_body.split('\\n')[0].strip()
-            else:
-                title = "${{ github.event.issue.title }}"
-                message_content = title.replace('[DATA] ', '')
-        
+
         # 清理消息内容（移除换行符，确保每行一条数据）
-        message_content = re.sub(r'[\\r\\n]+', ' ', message_content).strip()
+        message_content = re.sub(r'[\\r\\n]+', ' ', issue_body).strip()
         
         # 创建格式化数据行：ID|时间戳|作者|内容
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

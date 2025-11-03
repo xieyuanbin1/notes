@@ -276,7 +276,6 @@
               return null;
             })
             .filter((msg) => msg !== null);
-          console.log("Loaded messages:", messages);
           return messages;
         } catch (error) {
           console.error("获取留言数据失败:", error);
@@ -284,9 +283,9 @@
         }
       }
       // 页面加载时获取数据
-      document.addEventListener("DOMContentLoaded", loadMessages);
+      // document.addEventListener("DOMContentLoaded", loadMessages);
       // 可选：每5分钟自动刷新
-      setInterval(loadMessages, 5 * 60 * 1000);
+      // setInterval(loadMessages, 5 * 60 * 1000);
       const messages = [
         "保持好心情",
         "多喝水哦",
@@ -325,7 +324,7 @@
       let isMobile = pointerMediaQuery.matches || window.innerWidth <= 768;
       let maxCards = isMobile ? 120 : 180; // 限制 DOM 节点数量，减轻移动端压力
       const initialCardCount = isMobile ? 18 : 30;
-      let spawnInterval = isMobile ? 700 : 400;
+      let spawnInterval = isMobile ? 3000 : 1000;
       let zIndexCursor = 200;
       let spawnTimer = null;
 
@@ -383,7 +382,7 @@
 
         isMobile = nextIsMobile;
         maxCards = isMobile ? 120 : 180;
-        spawnInterval = isMobile ? 700 : 400;
+        spawnInterval = isMobile ? 3000 : 1000;
         document.body.classList.toggle("is-mobile", isMobile);
         scheduleNextSpawn();
       }
