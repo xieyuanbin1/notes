@@ -11,7 +11,7 @@ jobs:
     
     # 只有包含特定标签或特定格式的 issue 才触发
     if: |
-      contains(github.event.issue.labels.*.name, 'auto-update') ||
+      contains(github.event.issue.labels.*.name, 'notes') ||
       startsWith(github.event.issue.title, '[DATA]')
     
     steps:
