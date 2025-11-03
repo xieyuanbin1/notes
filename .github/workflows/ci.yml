@@ -21,144 +21,116 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         fetch-depth: 0
 
-    - name: Advanced data extraction
-      id: advanced-extract
+    - name: Extract and format message data
+      id: extract-data
       run: |
-        # 使用 Python 进行更复杂的数据提取
+        # 使用 Python 提取和格式化数据
         python3 << EOF
         import json
         import re
         from datetime import datetime
+        import base64
         
         issue_body = """${{ github.event.issue.body }}"""
         issue_number = ${{ github.event.issue.number }}
         author = "${{ github.event.issue.user.login }}"
         
-        # 定义提取模式
-        patterns = {
-            'name': r'名称:\s*(.+)',
-            'value': r'值:\s*(.+)', 
-            'category': r'分类:\s*(.+)',
-            'type': r'类型:\s*(.+)'
-        }
+        # 提取消息内容
+        patterns = [
+            r'消息:\s*(.+)',
+            r'内容:\s*(.+)', 
+            r'值:\s*(.+)',
+            r'留言:\s*(.+)'
+        ]
         
-        extracted_data = {
-            'id': issue_number,
-            'author': author,
-            'date': datetime.now().strftime('%Y-%m-%d')
-        }
-        
-        # 提取各个字段
-        for field, pattern in patterns.items():
+        message_content = ""
+        for pattern in patterns:
             match = re.search(pattern, issue_body)
             if match:
-                extracted_data[field] = match.group(1).strip()
+                message_content = match.group(1).strip()
+                break
         
-        # 设置默认值
-        if 'name' not in extracted_data:
-            # 移除 [DATA] 前缀
-            title = "${{ github.event.issue.title }}"
-            extracted_data['name'] = title.replace('[DATA] ', '')
+        # 如果没有找到格式化的内容
+        if not message_content:
+            if issue_body.strip():
+                message_content = issue_body.split('\\n')[0].strip()
+            else:
+                title = "${{ github.event.issue.title }}"
+                message_content = title.replace('[DATA] ', '')
         
-        if 'value' not in extracted_data:
-            # 取正文第一行前100字符
-            first_line = issue_body.split('\\n')[0] if issue_body else ""
-            extracted_data['value'] = first_line[:100]
+        # 清理消息内容（移除换行符，确保每行一条数据）
+        message_content = re.sub(r'[\\r\\n]+', ' ', message_content).strip()
         
-        if 'category' not in extracted_data:
-            extracted_data['category'] = 'default'
+        # 创建格式化数据行：ID|时间戳|作者|内容
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        formatted_line = f"{issue_number}|{timestamp}|{author}|{message_content}"
         
-        if 'type' not in extracted_data:
-            extracted_data['type'] = 'string'
+        # 对内容进行Base64编码，避免特殊字符问题
+        encoded_line = base64.b64encode(formatted_line.encode('utf-8')).decode('utf-8')
+        
+        print(f"原始消息: {message_content}")
+        print(f"格式化行: {formatted_line}")
+        print(f"编码后: {encoded_line}")
         
         # 使用新的输出方式
         with open('$GITHUB_OUTPUT', 'a') as f:
-            f.write(f'json_data={json.dumps(extracted_data, ensure_ascii=False)}\\n')
-            f.write(f'name={extracted_data["name"]}\\n')
-            f.write(f'value={extracted_data["value"]}\\n')
-            f.write(f'category={extracted_data["category"]}\\n')
+            f.write(f'message_content={message_content}\\n')
+            f.write(f'formatted_line={formatted_line}\\n')
+            f.write(f'encoded_line={encoded_line}\\n')
+            f.write(f'issue_number={issue_number}\\n')
         EOF
 
-    - name: Debug output
-      run: |
-        echo "提取的数据:"
-        echo "JSON: ${{ steps.advanced-extract.outputs.json_data }}"
-        echo "名称: ${{ steps.advanced-extract.outputs.name }}"
-        echo "值: ${{ steps.advanced-extract.outputs.value }}"
-        echo "分类: ${{ steps.advanced-extract.outputs.category }}"
-
-    - name: Update JavaScript data in HTML
+    - name: Update messages data file
       run: |
         # 定义变量
-        JSON_DATA='${{ steps.advanced-extract.outputs.json_data }}'
-        ISSUE_NUMBER="${{ github.event.issue.number }}"
+        ENCODED_LINE="${{ steps.extract-data.outputs.encoded_line }}"
+        MAX_LINES=100000
         
-        # HTML 文件路径
-        HTML_FILE="index.html"
+        # 数据文件路径
+        DATA_FILE="messages.dat"
         
-        # 检查 HTML 文件是否存在
-        if [ ! -f "$HTML_FILE" ]; then
-          echo "错误: $HTML_FILE 文件不存在"
-          exit 1
-        fi
+        echo "添加新消息到数据文件..."
         
-        # 使用 Node.js 处理 HTML 文件更新
+        # 使用 Node.js 处理数据文件
         node << EOF
         const fs = require('fs');
-        const htmlFile = '$HTML_FILE';
-        const newData = $JSON_DATA;
+        const dataFile = '$DATA_FILE';
+        const newLine = '$ENCODED_LINE';
+        const maxLines = $MAX_LINES;
         
-        // 读取 HTML 文件
-        let htmlContent = fs.readFileSync(htmlFile, 'utf8');
+        let lines = [];
         
-        console.log('开始更新 HTML 文件...');
-        
-        // 查找留言板数据数组的模式
-        const pattern = /(const\s+messages)/;
-        
-        const match = htmlContent.match(pattern);
-        
-        if (match) {
-          console.log('找到现有数据数组');
-          const prefix = match[1];
-          const existingContent = match[2].trim();
-          const suffix = match[3];
-          
-          let newArrayContent;
-          if (existingContent) {
-            // 如果数组不为空，在开头添加新数据
-            newArrayContent = \`\\n  \${JSON.stringify(newData, null, 2)},\${existingContent}\\n\`;
-          } else {
-            // 如果数组为空，直接添加数据
-            newArrayContent = \`\\n  \${JSON.stringify(newData, null, 2)}\\n\`;
-          }
-          
-          // 替换整个数组声明
-          const newDeclaration = prefix + newArrayContent + suffix;
-          htmlContent = htmlContent.replace(match[0], newDeclaration);
-          
-          console.log('成功更新数据数组');
-        } else {
-          console.log('未找到现有数据数组，创建新的...');
-          
-          // 在第一个 script 标签前插入新的 script
-          const scriptPattern = /(<script[^>]*>)/;
-          const scriptMatch = htmlContent.match(scriptPattern);
-          
-          if (scriptMatch) {
-            const newScript = \`\\n<script>\\n// 留言板数据 - 自动生成\\nconst messageData = [\\n  \${JSON.stringify(newData, null, 2)}\\n];\\n</script>\\n\\n\${scriptMatch[0]}\`;
-            htmlContent = htmlContent.replace(scriptMatch[0], newScript);
-          } else {
-            // 如果没有 script 标签，在 body 末尾添加
-            const bodyEndPattern = /(<\\/body>)/;
-            const newScript = \`\\n<script>\\n// 留言板数据 - 自动生成\\nconst messageData = [\\n  \${JSON.stringify(newData, null, 2)}\\n];\\n</script>\\n\\n</body>\`;
-            htmlContent = htmlContent.replace(bodyEndPattern, newScript);
+        // 读取现有数据
+        if (fs.existsSync(dataFile)) {
+          try {
+            const content = fs.readFileSync(dataFile, 'utf8');
+            lines = content.split('\\n').filter(line => line.trim() !== '');
+            console.log(\`读取到 \${lines.length} 条现有记录\`);
+          } catch (error) {
+            console.log('读取现有数据失败，创建新文件:', error.message);
           }
         }
         
-        // 写回文件
-        fs.writeFileSync(htmlFile, htmlContent, 'utf8');
-        console.log('HTML 文件更新完成');
+        // 在开头添加新行
+        lines.unshift(newLine);
+        
+        // 如果超过最大行数，截断数组
+        if (lines.length > maxLines) {
+          console.log(\`超过 \${maxLines} 条记录，移除最旧的 \${lines.length - maxLines} 条\`);
+          lines = lines.slice(0, maxLines);
+        }
+        
+        // 写回文件（每行一条数据）
+        fs.writeFileSync(dataFile, lines.join('\\n') + '\\n', 'utf8');
+        console.log(\`数据文件更新完成，现在有 \${lines.length} 条记录\`);
+        
+        // 显示前几条记录作为验证
+        if (lines.length > 0) {
+          console.log('前5条记录:');
+          lines.slice(0, 5).forEach((line, index) => {
+            console.log(\`\${index + 1}: \${line}\`);
+          });
+        }
         EOF
 
     - name: Commit and push changes
@@ -166,5 +138,5 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add .
-        git commit -m "自动更新: 添加 Issue #${{ github.event.issue.number }} 的留言数据"
+        git commit -m "自动更新: 添加 Issue #${{ steps.extract-data.outputs.issue_number }} 的留言到数据文件"
         git push
