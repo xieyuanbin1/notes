@@ -114,17 +114,9 @@ jobs:
         console.log('开始更新 HTML 文件...');
         
         // 查找留言板数据数组的模式
-        const patterns = [
-          /(var\\s+messages\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(const\\s+messages\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(let\\s+messages\\s*=\\s*\\[)([^\\]]*)(\\];)/
-        ];
+        const pattern = /(const\s+messages)/;
         
-        let match = null;
-        for (const pattern of patterns) {
-          match = htmlContent.match(pattern);
-          if (match) break;
-        }
+        const match = htmlContent.match(pattern);
         
         if (match) {
           console.log('找到现有数据数组');
