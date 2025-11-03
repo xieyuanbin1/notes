@@ -115,12 +115,9 @@ jobs:
         
         // 查找留言板数据数组的模式
         const patterns = [
-          /(var\\s+messageData\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(const\\s+messageData\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(let\\s+messageData\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(var\\s+dataArray\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(const\\s+dataArray\\s*=\\s*\\[)([^\\]]*)(\\];)/,
-          /(let\\s+dataArray\\s*=\\s*\\[)([^\\]]*)(\\];)/
+          /(var\\s+messages\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(const\\s+messages\\s*=\\s*\\[)([^\\]]*)(\\];)/,
+          /(let\\s+messages\\s*=\\s*\\[)([^\\]]*)(\\];)/
         ];
         
         let match = null;
