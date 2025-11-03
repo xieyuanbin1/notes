@@ -240,11 +240,41 @@
 
           const text = await response.text();
           const lines = text.split("\n").filter((line) => line.trim() !== "");
-          console.log('lines::', lines);
+
+          if (lines.length === 0) {
+            container.innerHTML = '<div class="loading">暂无留言</div>';
+            stats.innerHTML = "当前共有 0 条留言";
+            return;
+          }
+
+          // 解析并渲染留言
+          const messages = lines
+            .map((line) => {
+              try {
+                // Base64 解码
+                const decoded = atob(line);
+                const parts = decoded.split("|");
+
+                if (parts.length >= 4) {
+                  return {
+                    id: parts[0],
+                    date: parts[1],
+                    author: parts[2],
+                    content: parts.slice(3).join("|"), // 内容中可能包含 | 符号
+                  };
+                }
+              } catch (error) {
+                console.error("解析数据行失败:", error, line);
+                return null;
+              }
+              return null;
+            })
+            .filter((msg) => msg !== null);
+          console.log("Loaded messages:", messages);
         } catch (error) {}
       }
       // 页面加载时获取数据
-      document.addEventListener('DOMContentLoaded', loadMessages);
+      document.addEventListener("DOMContentLoaded", loadMessages);
       // 可选：每5分钟自动刷新
       setInterval(loadMessages, 5 * 60 * 1000);
       const messages = [
